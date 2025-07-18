@@ -1,10 +1,14 @@
 from database.session import engine, Base
 from fastapi import FastAPI, Depends
 from auth.register import router as register_router
+from auth.login import router as login_router
+from debug.users import router as debug_users_router
 
 app = FastAPI()
 
 app.include_router(register_router)
+app.include_router(login_router)
+app.include_router(debug_users_router)
 
 @app.on_event("startup")
 async def startup():
