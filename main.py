@@ -3,12 +3,23 @@ from fastapi import FastAPI, Depends
 from auth.register import router as register_router
 from auth.login import router as login_router
 from debug.users import router as debug_users_router
+from debug.approve import router as debug_approve_router
+
+# Import all models to register them with Base
+from models.user import User
+from models.todo import ToDoTask
+from models.blacklist import Blacklist
+from models.watchlist import Watchlist
+from models.kickban import KickBanLog
+from models.player_notes import PlayerNote
+from models.team_notes import TeamNote
 
 app = FastAPI()
 
 app.include_router(register_router)
 app.include_router(login_router)
 app.include_router(debug_users_router)
+app.include_router(debug_approve_router)
 
 @app.on_event("startup")
 async def startup():
@@ -18,7 +29,7 @@ async def startup():
 
 @app.get("/")
 async def root():
-    return {"message": "Roblox Admin Panel API is running."}
+    return {"status": 200}
 
 if __name__ == "__main__":
     from uvicorn import run
