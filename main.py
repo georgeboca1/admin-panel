@@ -3,7 +3,8 @@ from fastapi import FastAPI, Depends
 from auth.register import router as register_router
 from auth.login import router as login_router
 from debug.users import router as debug_users_router
-from debug.approve import router as debug_approve_router
+from debug.setters import router as debug_setters_router
+from user.users import router as users_router
 
 # Import all models to register them with Base
 from models.user import User
@@ -19,7 +20,9 @@ app = FastAPI()
 app.include_router(register_router)
 app.include_router(login_router)
 app.include_router(debug_users_router)
-app.include_router(debug_approve_router)
+app.include_router(users_router)
+app.include_router(debug_users_router)
+app.include_router(debug_setters_router)
 
 @app.on_event("startup")
 async def startup():

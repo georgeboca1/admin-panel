@@ -1,6 +1,6 @@
 import datetime
 from fastapi import APIRouter, Depends, HTTPException, Response, status, Request
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from passlib.context import CryptContext
 import jwt
@@ -8,15 +8,27 @@ from database.session import get_session
 from models.user import User
 from sqlalchemy.future import select
 import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 router = APIRouter(prefix="/auth",tags=["auth"])
 
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_DAYS = 7
-INACTIVITY_TIMEOUT_MINUTES = 30
+# Get environment variables with validation
+def get_env_var(key: str, default: str = None) -> str:
+    value = os.getenv(key, default)
+    if value is None:
+        raise RuntimeError(f"Environment variable {key} must be set")
+    return value
+
+SECRET_KEY = get_env_var("SECRET_KEY")
+ALGORITHM = get_env_var("ALGORITHM", "HS256")
+ACCESS_TOKEN_EXPIRE_DAYS = int(get_env_var("ACCESS_TOKEN_EXPIRE_DAYS", "7"))
+INACTIVITY_TIMEOUT_MINUTES = int(get_env_var("INACTIVITY_TIMEOUT_MINUTES", "30"))
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 async def authenticate_user(session: AsyncSession, username: str, password: str):
     result = await session.execute(select(User).where(User.username == username))
@@ -52,7 +64,7 @@ async def login(response: Response, form_data: OAuth2PasswordRequestForm = Depen
     )
     return {"msg": "Login successful"}
 
-async def get_current_user(request: Request, session: AsyncSession = Depends(get_session)):
+async def get_current_user(request: Request, session: AsyncSession = Depends(get_session), token: str = Depends(oauth2_scheme),):
     token = request.cookies.get("access_token")
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, status, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from passlib.context import CryptContext
 from models.user import User
 from database.session import get_session, Base
@@ -21,29 +22,37 @@ async def register_user(request: RegisterRequest, session: AsyncSession = Depend
     if not ROBLOX_REGEX.match(request.roblox_name):
         raise HTTPException(status_code=400, detail="Invalid Roblox username format.")
 
-    # Check for existing user
-    result = await session.execute(select(User).where(User.username == request.username))
-    if result.scalar():
-        raise HTTPException(status_code=409, detail="Username already exists.")
+    try:
+        # Using a transaction to ensure atomicity
+        async with session.begin():
+            # Check for existing user using SELECT FOR UPDATE to prevent race conditions
+            result = await session.execute(
+                select(User)
+                .where(User.username == request.username)
+                .with_for_update()
+            )
+            if result.scalar():
+                raise HTTPException(status_code=409, detail="Username already exists.")
 
-    # Hash password
-    password_hash = pwd_context.hash(request.password)
+            # Hash password
+            password_hash = pwd_context.hash(request.password)
 
-    # Find next available id
-    result = await session.execute(select(User.id))
-    ids = [row[0] for row in result.fetchall()]
-    next_id = max(ids) + 1 if ids else 1
+            # Create new user - let SQLAlchemy handle the ID
+            new_user = User(
+                username=request.username,
+                password_hash=password_hash,
+                roblox_name=request.roblox_name,
+                role="user",
+                is_active=True,
+                approved=False,
+                last_login=None
+            )
+            session.add(new_user)
 
-    new_user = User(
-        id=next_id,
-        username=request.username,
-        password_hash=password_hash,
-        roblox_name=request.roblox_name,
-        role="user",
-        is_active=True,
-        approved=False,
-        last_login=None
-    )
-    session.add(new_user)
-    await session.commit()
-    return {"message": "Registration successful. Awaiting approval."}
+        return {"message": "Registration successful. Awaiting approval."}
+    except SQLAlchemyError as e:
+        # Log the error here if you have logging set up
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred during registration. Please try again."
+        )
